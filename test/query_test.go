@@ -1,11 +1,14 @@
-package bsonquery
+package bsonquery_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
-	"github.com/samtech09/dbtools/mango"
+	bq "github.com/samtech09/bsonquery"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type testuser struct {
@@ -22,12 +25,9 @@ type testuser2 struct {
 	ExtraField string `bson:"extra"`
 }
 
-var ses *mango.MongoSession
+var client *mongo.Client
 var c *mongo.Collection
 
-func (t testuser) GetID() interface{} {
-	return t.ID
-}
 func (t *testuser) ToInterface(list []testuser) []interface{} {
 	var islice []interface{} = make([]interface{}, len(list))
 	for i, d := range list {
@@ -44,15 +44,19 @@ func (t *testuser2) ToInterface(list []testuser2) []interface{} {
 }
 
 func TestInit(t *testing.T) {
-	cfg := mango.MongoConfig{}
-	cfg.Host = "192.168.60.206"
-	cfg.Port = 27017
-	cfg.DbName = "testdb"
+	var err error
+	dbname := "testdb"
+	uri := fmt.Sprintf("mongodb://%s:%d/%s", "192.168.60.206", 27017, dbname)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		t.Errorf("Error connecting mongodb: %s", err.Error())
+		t.FailNow()
+	}
 
-	ses = mango.InitSession(cfg)
-	c = ses.GetColl("testusers")
-
-	c.Drop(context.Background())
+	c = client.Database(dbname).Collection("testusers")
+	c.Drop(context.Background()) // drop exisitng documents if any
 
 	// insert documents
 	usr := []testuser{}
@@ -66,7 +70,7 @@ func TestInit(t *testing.T) {
 	for i, d := range usr {
 		islice[i] = d
 	}
-	err := ses.InsertBulk(c, islice...)
+	_, err = c.InsertMany(context.Background(), islice)
 	if err != nil {
 		t.Errorf("Error inserting documents: %s", err.Error())
 		t.FailNow()
@@ -81,7 +85,7 @@ func TestInit(t *testing.T) {
 	for i, d := range usr2 {
 		islice2[i] = d
 	}
-	err = ses.InsertBulk(c, islice2...)
+	_, err = c.InsertMany(context.Background(), islice2)
 	if err != nil {
 		t.Errorf("Error inserting documents: %s", err.Error())
 		t.FailNow()
@@ -91,8 +95,8 @@ func TestInit(t *testing.T) {
 func TestFilterSimple(t *testing.T) {
 	// test filter
 	//   should return single record i.e. testuser{4, "test2", 37, 7}
-	filter := Builder().
-		And(C().EQ("name", "test2"), C().GT("age", 29)).
+	filter := bq.Builder().
+		And(bq.C().EQ("name", "test2"), bq.C().GT("age", 29)).
 		Build()
 	exp := 1
 	cur, err := c.Find(context.Background(), filter)
@@ -117,8 +121,8 @@ func TestFilterOr(t *testing.T) {
 		{ "$or": [ {"age": {"$gt": 30}}, {"score": {"$gt": 5}} ] }
 	*/
 	exp := 3
-	filter := Builder().
-		Or(C().GT("age", 40), C().GT("score", 7)).
+	filter := bq.Builder().
+		Or(bq.C().GT("age", 40), bq.C().GT("score", 7)).
 		Build()
 	cur, err := c.Find(context.Background(), filter)
 	if err != nil {
@@ -134,8 +138,8 @@ func TestFilterOr(t *testing.T) {
 func TestFilterRegex(t *testing.T) {
 	// check Regex, name like %3Bi%
 	exp := 2
-	filter := Builder().
-		And(C().Regex("name", "3Bi", false)).
+	filter := bq.Builder().
+		And(bq.C().Regex("name", "3Bi", false)).
 		Build()
 	cur, err := c.Find(context.Background(), filter)
 	if err != nil {
@@ -151,8 +155,8 @@ func TestFilterRegex(t *testing.T) {
 func TestFilterExist(t *testing.T) {
 	// find documents having field 'extra', field must exist, field-value could be null
 	exp := 2
-	filter := Builder().
-		And(C().Exist("extra", true)).
+	filter := bq.Builder().
+		And(bq.C().Exist("extra", true)).
 		Build()
 	cur, err := c.Find(context.Background(), filter)
 	if err != nil {
@@ -166,7 +170,7 @@ func TestFilterExist(t *testing.T) {
 }
 
 func TestCleanup(t *testing.T) {
-	ses.Cleanup()
+	client.Disconnect(context.Background())
 }
 
 func countDocs(cur *mongo.Cursor) int {

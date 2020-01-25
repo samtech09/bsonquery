@@ -4,6 +4,7 @@ type condition struct {
 	operator  string
 	value     interface{}
 	fieldName string
+	options   string
 }
 
 //C creates a new Condition
@@ -58,5 +59,20 @@ func (c *condition) NIN(fieldname string, val interface{}) condition {
 	c.operator = copNIN
 	c.fieldName = fieldname
 	c.value = val
+	return *c
+}
+func (c *condition) Regex(fieldname, expression string, ignorecase bool) condition {
+	c.operator = copRegex
+	c.fieldName = fieldname
+	c.value = expression
+	if ignorecase {
+		c.options = "i"
+	}
+	return *c
+}
+func (c *condition) Exist(fieldname string, expression bool) condition {
+	c.operator = copExists
+	c.fieldName = fieldname
+	c.value = expression
 	return *c
 }

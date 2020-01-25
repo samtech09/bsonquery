@@ -2,6 +2,7 @@ package bsonquery
 
 import (
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type builder struct {
@@ -21,14 +22,16 @@ const (
 	lopNor
 	lopNot
 
-	copEQ  = "$eq"
-	copGT  = "$gt"
-	copGTE = "$gte"
-	copIN  = "$in"
-	copLT  = "$lt"
-	copLTE = "$lte"
-	copNE  = "$ne"
-	copNIN = "$nin"
+	copEQ     = "$eq"
+	copGT     = "$gt"
+	copGTE    = "$gte"
+	copIN     = "$in"
+	copLT     = "$lt"
+	copLTE    = "$lte"
+	copNE     = "$ne"
+	copNIN    = "$nin"
+	copRegex  = "$regex"
+	copExists = "$exists"
 )
 
 func Builder() *builder {
@@ -112,6 +115,11 @@ func getArrayOfM(cond []condition) []bson.M {
 }
 
 func getM(c condition) bson.M {
+	if c.operator == copRegex {
+		//primitive.Regex{Pattern: "he", Options: ""}
+		m := bson.M{c.operator: primitive.Regex{Pattern: c.value.(string), Options: c.options}}
+		return m
+	}
 	m := bson.M{c.operator: c.value}
 	return m
 }

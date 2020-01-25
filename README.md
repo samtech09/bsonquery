@@ -29,7 +29,7 @@ Use `bq.And(...)` for querying one or more fields.
 ## Supported Operators
 
 ### Logical operators
-bsonquery Condition | equivalent operator
+bsonquery Function | equivalent operator
 ------------------- | -------------------
 bq.And | `$and`
 bq.Or | `$or`
